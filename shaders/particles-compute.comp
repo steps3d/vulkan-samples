@@ -1,0 +1,54 @@
+#version 450
+#extension GL_ARB_separate_shader_objects : enable
+
+layout( local_size_x = 1024 ) in;
+
+const	float gravity1        = 1000.0;
+const	vec3  blackHolePos1   = vec3(5,0,0);
+const 	float gravity2        = 1000.0;
+const	vec3  blackHolePos2   = vec3(-5,0,0);
+const	float particleInvMass = 1.0 / 0.1;
+const	float deltaT          = 0.00003;
+const	float maxDist         = 45.0;
+
+layout(std430, binding = 0) buffer Pos 
+{
+	vec4 position [];
+};
+
+layout(std430, binding = 1) buffer Vel 
+{
+	vec4 velocity [];
+};
+
+void main() 
+{
+	uint idx = gl_GlobalInvocationID.x;
+	
+	if ( idx >= 64*64*64 )
+		return;
+		
+	vec3 p   = position [idx].xyz;
+
+				// force from black hole #1
+	vec3	d     = blackHolePos1 - p;
+	float	distSq = dot ( d, d );
+	vec3	force = d * (gravity1 / distSq);
+
+				// force from black hole #2
+	d      = blackHolePos2 - p;
+	distSq = dot ( d, d );
+	force += d * (gravity2 / distSq);
+
+				// reset particles that get too far from the attractors
+	if ( sqrt ( distSq ) > maxDist ) 
+		position [idx] = vec4(0,0,0,1);
+	else 
+	{
+				// apply simple Euler integrator
+		vec3 a = force * particleInvMass;
+
+		position [idx] = vec4 ( p + velocity[idx].xyz * deltaT + 0.5 * a * deltaT * deltaT, 1.0 );
+		velocity [idx] = vec4 ( velocity[idx].xyz + a * deltaT, 0.0 );
+	}
+}
